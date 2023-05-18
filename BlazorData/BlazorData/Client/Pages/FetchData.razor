@@ -1,0 +1,177 @@
+﻿@page "/data"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using BlazorData.Shared
+@attribute [Authorize]
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Payload Data</PageTitle>
+
+<h1>Payload Data</h1>
+<AuthorizeView>
+    <Authorized>
+        @if (payloads == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Device ID</th>
+                        <th>Device Name</th>
+                        <th>Device Type</th>
+                        <th>Group ID</th>
+                        <th>Data Type</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var data in payloads)
+                    {
+                        <tr>
+                            <td>@data.DeviceId</td>
+                            <td>@data.DeviceName</td>
+                            <td>@data.DeviceType</td>
+                            <td>@data.GroupId</td>
+                            <td>@data.DataType</td>
+                            <td>@data.Timestamp</td>
+                            <td>
+                                <button class="btn btn-primary" @onclick="(() => EditData(data))">
+                                    Edit
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p>
+                <button class="btn btn-primary" @onclick="AddNewData">
+                    Add New Data
+                </button>
+            </p>
+            @if (ShowPopup)
+            {
+                <div class="modal" tabindex="-1" style="display:block"
+                     role="dialog">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3 class="modal-title">Edit Data</h3>
+                                <button type="button" class="close"
+                                @onclick="ClosePopup">
+                                    <span aria-hidden="true">X</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="deviceid" class="form-label">Device ID</label>
+                                    <input id="deviceid" class="form-control" type="text" placeholder="Device ID" @bind="objPayload.DeviceId" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="devicename" class="form-label">Device Name</label>
+                                    <input id="devicename" class="form-control" type="text" placeholder="Device Name" @bind="objPayload.DeviceName" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="devicetype" class="form-label">Device Type</label>
+                                    <input id="devicetype" class="form-control" type="text" placeholder="Device Type" @bind="objPayload.DeviceType" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="gp" class="form-label">Group Id</label>
+                                    <input id="gp" class="form-control" type="text" placeholder="Group ID" @bind="objPayload.GroupId" />
+                                </div>
+                                <div class="mb-3">
+                                    <label for="dt" class="form-label">Data Type</label>
+                                    <input id="dt" class="form-control" type="text" placeholder="Device type" @bind="objPayload.DataType" />
+                                </div>
+                                <br />
+                                <button class="btn btn-primary m-3" @onclick="SavePayload">
+                                    Save
+                                </button>
+                                @if (objPayload.Id != Guid.Empty)
+                                {
+                                    <button class="btn btn-primary" @onclick="DeletePayload">
+                                        Delete
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p>You're not signed in.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    private List<PayloadDBData> payloads = new List<PayloadDBData>();
+    PayloadDBData objPayload = new PayloadDBData();
+    bool ShowPopup = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Get the current user
+        var authState = await authenticationStateTask;
+        var user = authState.User;
+        if (user.Identity != null)
+        {
+            if (user.Identity.IsAuthenticated)
+            {
+                payloads = await Http.GetFromJsonAsync<List<PayloadDBData>>("/api/Payload/GetAsync");
+            }
+        }
+    }
+    private void ClosePopup()
+    {
+        ShowPopup = false;
+    }
+
+    private void AddNewData()
+    {
+        objPayload = new PayloadDBData();
+        objPayload.Id = Guid.Empty;
+        ShowPopup = true;
+    }
+
+    private async Task SavePayload()
+    {
+        ShowPopup = false;
+        var user = (await authenticationStateTask).User;
+        if (objPayload.Id == Guid.Empty)
+        {
+            objPayload.Id = Guid.NewGuid();
+            objPayload.UserName = "";
+            PayloadDBData cloneObj = objPayload;
+            await Http.PostAsJsonAsync( "/api/Payload/Post",  cloneObj);
+        }
+        else
+        {
+            await Http.PutAsJsonAsync( "/api/Payload/Put",  objPayload);
+        }
+
+        payloads = await Http.GetFromJsonAsync<List<PayloadDBData>>("/api/Payload/GetAsync");
+        StateHasChanged();
+    }
+
+    private void EditData(PayloadDBData data)
+    {
+        objPayload = data;
+        ShowPopup = true;
+    }
+
+    private async Task DeletePayload()
+    {
+        ShowPopup = false;
+        await Http.DeleteAsync("/api/Payload/Delete/" + objPayload.Id);
+        payloads = await Http .GetFromJsonAsync<List<PayloadDBData>>("/api/Payload/GetAsync");
+        StateHasChanged();
+    }
+}
+
